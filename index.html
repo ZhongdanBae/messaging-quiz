@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1">
 <meta name="theme-color" content="#FEE500" id="themeColor">
 <meta name="apple-mobile-web-app-capable" content="yes">
-<meta name="mq-build" content="20260930034918">
+<meta name="mq-build" content="20260930045024">
 <title>메시징 퀴즈!</title>
 <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.min.css">
@@ -1184,9 +1184,9 @@ function bowPose(g, t, ox, snap, arrow){
 
 let live = null, liveAt = 0, liveId = '', lastShotNo = 0;
 let turnCh = null, padCh = null, padJoined = false, padLeaving = null;
-// started: 이 페이지에서 한 번 '컨트롤러 시작'을 눌렀다(권한은 그 탭에서만 받을 수 있다). 그 뒤 차례는 저절로 잡는다.
+// 내 차례가 오면 누르지 않아도 컨트롤러가 된다. 누르는 순간에만 되는 것(아이폰 자이로 권한 창, 소리, 전체 화면)은 컨트롤러를 처음 만질 때 한다.
 // nonce 는 잡으려는 번호, owned 는 이번 차례에 실제로 잡았던 번호(같은 번호로 다시 인정받으면 번호를 처음부터 세지 않는다).
-const ctl = { started: false, nonce: '', owned: '', ownAt: 0, turn: -1, owning: false, claimAt: 0, lost: '', stopped: -1 };
+const ctl = { nonce: '', owned: '', ownAt: 0, turn: -1, owning: false, claimAt: 0, lost: '', stopped: -1 };
 let body = null, bodyAt = 0, rtt = -1;
 
 /* 회전 행렬로 폰 자세를 읽는다. deviceorientation 의 alpha·beta·gamma 는 R = Rz(α)·Rx(β)·Ry(γ) (기기 → 지구 좌표, z 가 위).
@@ -1471,7 +1471,11 @@ const padSend = (event, payload) => { if(!padCh || !padJoined) return false; try
 
 const liveAlive = () => !!live && Date.now() - liveAt < LIVE_TIMEOUT;
 const mine = () => !!(me && live && live.who && live.who.n && !live.who.cpu && nkey(live.who.n) === nkey(me.name));
-const wantCtl = () => liveAlive() && mine() && ctl.started && ctl.stopped !== live.turn;
+// 새로 잡는 건 화면이 켜져 있고(주머니 속 폰은 안 잡는다) 퀴즈 문제·이름 고치기가 열려 있지 않을 때만이다.
+// 진행자가 이번 화살을 마우스로 가져갔으면(live.mt) 다음 화살까지 기다린다. 이미 잡은 차례는 끝까지 간다.
+// 같은 이름의 다른 폰이 잡았으면 패드 채널에서 나와 실황을 본다(실황의 o 가 비면 다시 잡는다).
+const autoOk = () => !document.hidden && !editing && !quizBusy() && !live.mt;
+const wantCtl = () => liveAlive() && mine() && ctl.stopped !== live.turn && ctl.lost !== 'other' && (ctl.owning || autoOk());
 
 function onLive(p){
   if(!p || p.v !== 1 || p.k !== 'live') return;
@@ -1523,7 +1527,8 @@ function becomeOwner(n){
     ctl.owned = n;
     P.q = 0; P.tid = 0; P.tel = -1; P.te = 2; P.ev = []; P.evn = 0; P.cal = 0; P.touch = false; P.dy = 0; P.dx = 0; P.vx = 0; P.last = 0;
     padPtr = null; breathPtr = null; P.breath = false; $('#cpBreath').classList.remove('on'); lpReset();
-    feel('tick');
+    feel('tick'); flash('shot', .5);
+    ctlWarm();
   }
   arcPaint();
   sendPad(true);
@@ -1554,7 +1559,7 @@ function sendPad(force){
 setInterval(() => { try{ gyroTick(); if(ctl.owning) sendPad(false); }catch(e){} }, 16);
 (function loop(){ try{ arcTick(); }catch(e){} requestAnimationFrame(loop); })();
 // 시험용: 로컬 주소로 띄웠을 때만 안쪽 상태를 볼 수 있게 한다
-if(location.hostname === '127.0.0.1') window.__arc = { ctl, P, G, Hap, LP, Snd, BOWK, get GEO(){ return GEO; }, get live(){ return live; }, get body(){ return body; }, get padJoined(){ return padJoined; }, get rtt(){ return rtt; } };
+if(location.hostname === '127.0.0.1') window.__arc = { ctl, P, G, Hap, LP, Snd, BOWK, get gyroPerm(){ return gyroPerm; }, get GEO(){ return GEO; }, get live(){ return live; }, get body(){ return body; }, get padJoined(){ return padJoined; }, get rtt(){ return rtt; } };
 
 function onBody(p){
   if(!p || !live || p.turn !== live.turn || p.n !== ctl.nonce) return;
@@ -1741,15 +1746,42 @@ function breathUp(force, e){ if(e && e.pointerId !== breathPtr) return; if(breat
   tap('#cpRaise', () => { pushEv('raise'); feel('tick'); });
   $('#cpMenu').addEventListener('click', openSheet); hapOn($('#cpMenu'));
 })();
-// 아이폰 자이로 권한은 사용자가 누른 그 순간 안에서만 물을 수 있다. 진동(크롬)과 화면 꺼짐 방지도 이 탭에서 시작한다.
-async function startCtl(){
-  ctl.started = true; ctl.stopped = -1;
+// 아이폰 자이로 권한: 이미 정했으면(같은 Safari 세션에서 허용함) 누르지 않아도 답이 온다. 아직이면 누르는 순간에만 창을 띄울 수 있다.
+let gyroPerm = typeof DeviceOrientationEvent !== 'undefined' && typeof DeviceOrientationEvent.requestPermission === 'function' ? '' : 'granted';
+function askGyro(){
+  if(gyroPerm !== '') return;
+  gyroPerm = 'asking';
+  // 누르는 이벤트 안에서 곧바로 불러야 창이 뜬다(미룬 호출은 누름으로 안 친다)
+  let pr; try{ pr = DeviceOrientationEvent.requestPermission(); }catch(e){ gyroPerm = ''; return; }
+  Promise.resolve(pr).then(r => {
+    gyroPerm = r === 'granted' ? 'granted' : 'denied';
+    if(gyroPerm !== 'granted') toast('자이로를 못 써요. 패드를 끌어서 조준해요');
+    cpPaint();
+  }).catch(() => { gyroPerm = ''; });
+}
+// 페이지를 열 때 한 번 물어본다. 이미 허용했으면 누르지 않아도 'granted' 가 오고, 아직이면 거절되니 첫 탭에서 다시 묻는다.
+if(gyroPerm === ''){ try{ Promise.resolve(DeviceOrientationEvent.requestPermission()).then(r => { if(gyroPerm === '') gyroPerm = r === 'granted' ? 'granted' : 'denied'; }).catch(() => {}); }catch(e){} }
+// 컨트롤러가 될 때(누르지 않은 상태): 되는 것만 해 둔다. 소리는 준비만 하고, 화면 꺼짐 방지는 안 되면 첫 탭에서 다시 한다.
+function ctlWarm(){
   Snd.unlock();
-  lockLandscape();       // 전체 화면은 누른 순간에만 된다(안드로이드). 아이폰은 여기서 아무것도 안 한다
-  try{ if(typeof DeviceOrientationEvent !== 'undefined' && typeof DeviceOrientationEvent.requestPermission === 'function'){
-    const r = await DeviceOrientationEvent.requestPermission(); if(r !== 'granted') toast('자이로를 못 써요. 패드를 끌어서 조준해요'); } }catch(e){}
-  if(Hap.mode === 'vibrate'){ try{ navigator.vibrate(1); }catch(e){} }
+  askGyro();
   wakeOn();
+}
+// 컨트롤러를 처음 만질 때(손을 떼는 순간이 브라우저가 인정하는 '누름'이다): 권한·소리·화면 꺼짐 방지, 안드로이드는 전체 화면과 가로 고정.
+// 전체 화면은 화면 크기가 바뀌니 당기는 중이 아닐 때(활 들기 전)만 한 번 한다.
+// 아이폰은 touchend·click 을 누름으로 친다(pointerup 은 확실하지 않다). 안드로이드는 셋 다 된다.
+let fsTried = false;
+function onGesture(e){
+  if(!ctl.owning || $('#arcPad').hidden) return;
+  Snd.unlock(); wakeOn();
+  if(e.type === 'pointerup') return;
+  askGyro();
+  if(!fsTried && !P.touch && !LP.dr){ fsTried = true; lockLandscape(); }
+}
+for(const ev of ['pointerup', 'touchend', 'click']) document.addEventListener(ev, onGesture, true);
+// '그만 쓰기'로 넘긴 차례를 다시 폰으로 가져온다
+function resumeCtl(){
+  ctl.lost = ''; ctl.stopped = -1;
   syncCtl();
   arcPaint();
 }
@@ -1761,9 +1793,10 @@ function lockLandscape(){
   try{ const el = document.documentElement; if(!document.fullscreenElement && el.requestFullscreen) el.requestFullscreen({ navigationUI: 'hide' }).then(() => { try{ screen.orientation.lock('landscape').catch(() => {}); }catch(e){} }).catch(() => {}); }catch(e){}
 }
 function unlockLandscape(){ try{ if(screen.orientation && screen.orientation.unlock) screen.orientation.unlock(); }catch(e){} try{ if(document.fullscreenElement) document.exitFullscreen().catch(() => {}); }catch(e){} }
+// 화면이 꺼지거나 다른 앱으로 가면 차례를 놓는다(당기던 건 내려놓고 bye). 게임은 마우스로 돌아가고, 화면이 켜지면 다시 잡는다.
 document.addEventListener('visibilitychange', () => {
-  if(document.hidden){ if(ctl.owning){ padUp(true); breathUp(true); sendPad(true); } }
-  else if(ctl.owning || ctl.started) wakeOn();
+  if(document.hidden){ if(ctl.owning || padCh){ padUp(true); breathUp(true); if(ctl.owning) sendPad(true); dropCtl(); arcPaint(); } }
+  else { syncCtl(); arcPaint(); if(ctl.owning) wakeOn(); }
 });
 window.addEventListener('pagehide', () => { if(ctl.owning){ padUp(true); breathUp(true); sendPad(true); sendBye(); } });
 window.addEventListener('orientationchange', () => setTimeout(arcPaint, 250));
@@ -1853,16 +1886,15 @@ function paintLive(){
   paintBoard();
   // 버튼은 내용이 바뀔 때만 새로 만든다(그리는 도중에 누른 탭이 사라지지 않게)
   const cta = $('#alCta');
-  const kind = !mine() ? '' : ctl.lost === 'other' ? 'other' : ctl.stopped === p.turn ? 'stopped' : ctl.started ? 'wait' : 'start';
+  const kind = !mine() ? '' : ctl.lost === 'other' ? 'other' : ctl.stopped === p.turn ? 'stopped' : p.mt ? 'mouse' : '';
   cta.hidden = !kind;
   if(cta.dataset.k !== kind){
     cta.dataset.k = kind;
     if(kind === 'other') cta.innerHTML = '<p>같은 이름의 다른 폰이 이 차례를 먼저 잡았어요</p>';
     else if(kind === 'stopped') cta.innerHTML = '<button type="button" id="alStart">다시 폰으로 쏘기</button><p>이번 차례는 진행자가 마우스로 쏘고 있어요</p>';
-    else if(kind === 'wait') cta.innerHTML = '<p>컨트롤러를 연결하는 중이에요…</p>';
-    else if(kind === 'start') cta.innerHTML = '<button type="button" id="alStart">내 차례예요 · 컨트롤러 시작</button><p>폰을 가로로 두 손으로 잡아요. 기울여서 조준하고, 오른쪽 패드를 끌어 당겨요</p>';
+    else if(kind === 'mouse') cta.innerHTML = '<p>이번 화살은 진행자가 마우스로 쏴요. 다음 화살에 폰이 컨트롤러로 바뀌어요</p>';
     else cta.innerHTML = '';
-    const b = $('#alStart'); if(b){ hapOn(b); b.addEventListener('click', () => { ctl.lost = ''; startCtl(); }); }
+    const b = $('#alStart'); if(b){ hapOn(b); b.addEventListener('click', resumeCtl); }
   }
 }
 function paintLast(pop){
@@ -1905,7 +1937,7 @@ function cpPaint(){
   const net = $('#cpNet'); net.querySelector('i').classList.toggle('bad', !ok);
   net.querySelector('span').textContent = !ctl.owning ? '연결하는 중…' : !ok ? '게임 신호 기다리는 중' : `연결됨${rtt >= 0 ? ' · ' + Math.round(rtt / 2) + 'ms' : ''}`;
   const portrait = innerHeight > innerWidth;
-  $('#cpTip').textContent = !gyroFresh() ? '자이로가 없어요. 끝까지 당긴 뒤 패드를 끌어 조준해요' : portrait ? '가로로 두 손에 쥐면 더 편해요' : '';
+  $('#cpTip').textContent = gyroPerm === '' || gyroPerm === 'asking' ? '화면을 한 번 누르면 자이로를 켜요' : !gyroFresh() ? '자이로가 없어요. 끝까지 당긴 뒤 패드를 끌어 조준해요' : portrait ? '가로로 두 손에 쥐면 더 편해요' : '';
   const mt = body && body.mt, full = LP.dr && lpVis() >= 0.96, cl = !!(body && body.cl);
   let m = '', s = '', lab = '', gold = false;
   if(!ctl.owning) m = '연결하는 중';
