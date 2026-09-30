@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1">
 <meta name="theme-color" content="#FEE500" id="themeColor">
 <meta name="apple-mobile-web-app-capable" content="yes">
-<meta name="mq-build" content="20260930045024">
+<meta name="mq-build" content="20260930182246">
 <title>메시징 퀴즈!</title>
 <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.min.css">
@@ -333,6 +333,11 @@ html.arc-open,html.arc-open body{overflow:hidden;background:#0C0D0F}
 .cp-res b{font-size:16px;font-weight:900}
 .cp-note{position:absolute;left:50%;top:calc(var(--sat) + 14px);transform:translateX(-50%);z-index:3;padding:8px 14px;border-radius:12px;background:rgba(255,138,91,.95);color:#191919;font-size:13px;font-weight:800;white-space:nowrap;pointer-events:none}
 .cp-edge{position:absolute;inset:0;z-index:2;pointer-events:none;box-shadow:inset 0 0 0 var(--ew,0px) var(--ec,transparent);transition:box-shadow .15s}
+.cp-gyro{position:absolute;inset:0;z-index:5;display:flex;align-items:center;justify-content:center;padding:16px;background:rgba(6,7,8,.9);touch-action:manipulation}
+.cp-gyro .gb{width:min(360px,100%);display:flex;flex-direction:column;align-items:center;gap:10px;text-align:center;padding:20px 18px;border-radius:20px;background:#15171A;box-shadow:inset 0 0 0 1px var(--krim)}
+.cp-gyro b{font-size:19px;font-weight:900}
+.cp-gyro p{margin:0;font-size:13.5px;font-weight:700;line-height:1.5;color:var(--k2);word-break:keep-all}
+.cp-gyro .cbtn{height:48px;min-width:160px;font-size:16px}
 .cp-guide{position:absolute;inset:0;z-index:3;pointer-events:none;background:rgba(6,7,8,.72);transition:opacity .4s}
 .cp-guide.out{opacity:0}
 .cp-guide .th{position:absolute;width:68px;height:88px;margin:-44px 0 0 -34px;border-radius:50% 50% 46% 46%;border:2px dashed rgba(255,255,255,.7);background:rgba(255,255,255,.07)}
@@ -538,6 +543,7 @@ html.arc-open,html.arc-open body{overflow:hidden;background:#0C0D0F}
   <div class="cp-edge" id="cpEdge"></div>
   <div class="cp-guide" id="cpGuide" hidden></div>
   <div class="cp-note" id="cpNote" hidden></div>
+  <div class="cp-gyro" id="cpGyro" hidden><div class="gb"><b>자이로를 켜 주세요</b><p id="cpGyroMsg"></p><button class="cbtn y" type="button" id="cpGyroBtn">자이로 켜기</button></div></div>
 </div>
 <div class="arc-flash" id="arcFlash"></div>
 <div class="cs" id="cpSheet" hidden>
@@ -1755,7 +1761,6 @@ function askGyro(){
   let pr; try{ pr = DeviceOrientationEvent.requestPermission(); }catch(e){ gyroPerm = ''; return; }
   Promise.resolve(pr).then(r => {
     gyroPerm = r === 'granted' ? 'granted' : 'denied';
-    if(gyroPerm !== 'granted') toast('자이로를 못 써요. 패드를 끌어서 조준해요');
     cpPaint();
   }).catch(() => { gyroPerm = ''; });
 }
@@ -1767,16 +1772,14 @@ function ctlWarm(){
   askGyro();
   wakeOn();
 }
-// 컨트롤러를 처음 만질 때(손을 떼는 순간이 브라우저가 인정하는 '누름'이다): 권한·소리·화면 꺼짐 방지, 안드로이드는 전체 화면과 가로 고정.
-// 전체 화면은 화면 크기가 바뀌니 당기는 중이 아닐 때(활 들기 전)만 한 번 한다.
+// 컨트롤러를 처음 만질 때(손을 떼는 순간이 브라우저가 인정하는 '누름'이다): 권한·소리·화면 꺼짐 방지.
+// 화면 방향과 전체 화면은 건드리지 않는다. 사람이 쥔 대로 둔다.
 // 아이폰은 touchend·click 을 누름으로 친다(pointerup 은 확실하지 않다). 안드로이드는 셋 다 된다.
-let fsTried = false;
 function onGesture(e){
   if(!ctl.owning || $('#arcPad').hidden) return;
   Snd.unlock(); wakeOn();
   if(e.type === 'pointerup') return;
   askGyro();
-  if(!fsTried && !P.touch && !LP.dr){ fsTried = true; lockLandscape(); }
 }
 for(const ev of ['pointerup', 'touchend', 'click']) document.addEventListener(ev, onGesture, true);
 // '그만 쓰기'로 넘긴 차례를 다시 폰으로 가져온다
@@ -1788,11 +1791,6 @@ function resumeCtl(){
 let wake = null;
 async function wakeOn(){ try{ if('wakeLock' in navigator && !wake){ wake = await navigator.wakeLock.request('screen'); wake.addEventListener('release', () => { wake = null; }); } }catch(e){ wake = null; } }
 function wakeOff(){ try{ if(wake) wake.release(); }catch(e){} wake = null; }
-function lockLandscape(){
-  if(isIOS) return;       // 아이폰 브라우저는 화면 방향을 못 잠근다
-  try{ const el = document.documentElement; if(!document.fullscreenElement && el.requestFullscreen) el.requestFullscreen({ navigationUI: 'hide' }).then(() => { try{ screen.orientation.lock('landscape').catch(() => {}); }catch(e){} }).catch(() => {}); }catch(e){}
-}
-function unlockLandscape(){ try{ if(screen.orientation && screen.orientation.unlock) screen.orientation.unlock(); }catch(e){} try{ if(document.fullscreenElement) document.exitFullscreen().catch(() => {}); }catch(e){} }
 // 화면이 꺼지거나 다른 앱으로 가면 차례를 놓는다(당기던 건 내려놓고 bye). 게임은 마우스로 돌아가고, 화면이 켜지면 다시 잡는다.
 document.addEventListener('visibilitychange', () => {
   if(document.hidden){ if(ctl.owning || padCh){ padUp(true); breathUp(true); if(ctl.owning) sendPad(true); dropCtl(); arcPaint(); } }
@@ -1823,7 +1821,7 @@ $('#csFine').addEventListener('click', () => { opts.fine = !opts.fine; lsSet('mq
 $('#csLefty').addEventListener('click', () => { opts.lefty = !opts.lefty; lsSet('mq-arc-lefty', opts.lefty ? '1' : '0'); GEO = null; openSheet(); cpPaint(); });
 $('#csSnd').addEventListener('click', () => { opts.snd = !opts.snd; lsSet('mq-arc-snd', opts.snd ? '1' : '0'); if(opts.snd){ Snd.unlock(); setTimeout(() => Snd.play('anchor'), 60); } openSheet(); });
 $('#csClose').addEventListener('click', () => { $('#cpSheet').hidden = true; });
-$('#csStop').addEventListener('click', () => { $('#cpSheet').hidden = true; if(live) ctl.stopped = live.turn; dropCtl(); unlockLandscape(); wakeOff(); arcPaint(); });
+$('#csStop').addEventListener('click', () => { $('#cpSheet').hidden = true; if(live) ctl.stopped = live.turn; dropCtl(); wakeOff(); arcPaint(); });
 for(const id of ['#csInvX', '#csInvY', '#csHap', '#csFine', '#csLefty', '#csSnd', '#csClose', '#csStop']) hapOn($(id));
 // 진동 확인: 안드로이드는 강·중·약 세 번, 아이폰은 누르는 순간 한 번(실제 탭) 뒤 0.7초 뒤에 코드로 세 번.
 $('#csTest').addEventListener('click', () => {
@@ -1859,14 +1857,12 @@ function arcPaint(){
   if(el.hidden === on){ el.hidden = !on; document.documentElement.classList.toggle('arc-open', on); if(!on){ Hap.stop(); } }
   $('#arcLive').hidden = !showLive; $('#arcPad').hidden = !showCtl;
   // 컨트롤러가 내려가면 가장자리 색과 첫 사용 안내도 같이 걷는다(실황 위에 남지 않게)
+  if(!showCtl) $('#cpGyro').hidden = true;
   if(!showCtl){ if(edgeK){ edgeK = ''; const e = $('#cpEdge'); e.style.setProperty('--ec', 'transparent'); e.style.setProperty('--ew', '0px'); } $('#cpGuide').hidden = true; }
-  if(!on || ctl.stopped === (live && live.turn)) unlockLandscapeSoon();
   if(showLive) paintLive();
   if(showCtl) cpPaint();
   paintPause();
 }
-let unlockT = 0;
-function unlockLandscapeSoon(){ if(document.fullscreenElement && !unlockT){ unlockT = setTimeout(() => { unlockT = 0; if($('#arc').hidden || !wantCtl()) unlockLandscape(); }, 1500); } }
 function paintLive(){
   const p = live, w = p.who || {};
   $('#alTitle').textContent = p.title || '';
@@ -1936,8 +1932,8 @@ function cpPaint(){
   const ok = ctl.owning && padJoined && body && performance.now() - bodyAt < 3000;
   const net = $('#cpNet'); net.querySelector('i').classList.toggle('bad', !ok);
   net.querySelector('span').textContent = !ctl.owning ? '연결하는 중…' : !ok ? '게임 신호 기다리는 중' : `연결됨${rtt >= 0 ? ' · ' + Math.round(rtt / 2) + 'ms' : ''}`;
-  const portrait = innerHeight > innerWidth;
-  $('#cpTip').textContent = gyroPerm === '' || gyroPerm === 'asking' ? '화면을 한 번 누르면 자이로를 켜요' : !gyroFresh() ? '자이로가 없어요. 끝까지 당긴 뒤 패드를 끌어 조준해요' : portrait ? '가로로 두 손에 쥐면 더 편해요' : '';
+  $('#cpTip').textContent = '';
+  paintGyroAsk();
   const mt = body && body.mt, full = LP.dr && lpVis() >= 0.96, cl = !!(body && body.cl);
   let m = '', s = '', lab = '', gold = false;
   if(!ctl.owning) m = '연결하는 중';
@@ -1968,6 +1964,31 @@ function cpPaint(){
   note.hidden = !G.sideways; note.textContent = '화면 회전 잠금을 풀면 화면이 폰 방향을 따라와요';
   guideMaybe();
 }
+// 자이로가 안 켜져 있으면 컨트롤러를 덮고 켜 달라고 한다. 켜질 때까지 계속 뜬다.
+// 화면을 돌린 직후처럼 잠깐 값이 끊기는 건 1초 기다린다. 아이폰은 이 창의 버튼이 곧 권한을 묻는 '누름'이다.
+let gyroBadAt = 0;
+function paintGyroAsk(){
+  const el = $('#cpGyro');
+  const ok = gyroPerm === 'granted' && gyroFresh();
+  if(!ctl.owning || ok){ gyroBadAt = 0; el.hidden = true; return; }
+  const now = performance.now();
+  if(!gyroBadAt) gyroBadAt = now;
+  const ask = gyroPerm === '' || gyroPerm === 'asking';
+  if(!ask && gyroPerm !== 'denied' && now - gyroBadAt < 1000) return;
+  const b = $('#cpGyroBtn');
+  let m;
+  if(ask){ m = '폰을 기울여서 조준해요. 아래 버튼을 누르고 동작 및 방향 접근을 허용해 주세요.'; b.textContent = '자이로 켜기'; }
+  else if(gyroPerm === 'denied'){ m = '자이로가 막혀 있어요. Safari를 완전히 껐다가 이 페이지를 다시 열고 허용을 눌러 주세요.'; b.textContent = '다시 묻기'; }
+  else if(isIOS){ m = '자이로 값이 안 들어와요. 설정 앱의 Safari에서 동작 및 방향 접근을 켠 뒤 새로고침해 주세요.'; b.textContent = '새로고침'; }
+  else { m = '자이로 값이 안 들어와요. 크롬 주소창 왼쪽 아이콘에서 사이트 설정의 동작 센서를 허용한 뒤 새로고침해 주세요.'; b.textContent = '새로고침'; }
+  $('#cpGyroMsg').textContent = m;
+  el.hidden = false;
+}
+$('#cpGyroBtn').addEventListener('click', () => {
+  if(gyroPerm === '' || gyroPerm === 'denied'){ gyroPerm = ''; askGyro(); return; }
+  if(gyroPerm === 'granted') location.reload();
+});
+setInterval(() => { if(!$('#arcPad').hidden) paintGyroAsk(); }, 300);
 // 첫 사용 안내: 폰마다 한 번, 3초 동안 두 엄지 자리를 보여 주고 사라진다. 누르는 건 막지 않는다.
 let guideT = 0;
 function guideMaybe(){
@@ -1981,7 +2002,7 @@ function guideMaybe(){
     <div class="gl" style="left:${x(b)}px;width:${b.width}px;top:${y(b) + b.height / 2 + 54}px">${L[0]} 엄지<small>누르고 있으면 숨 참기</small></div>
     <div class="th" style="left:${x(p) + p.width / 2}px;top:${y(p) + GEO.yR}px"></div>
     <div class="gl" style="left:${x(p)}px;width:${p.width}px;top:${y(p) + GEO.yR + 54}px">${L[1]} 엄지<small>시위를 잡고 아래로 · 떼면 발사</small></div>
-    <div class="gl" style="left:0;right:0;top:calc(var(--sat) + 12px)">폰을 가로로 두 손에 쥐고, 기울여서 조준해요</div>`;
+    <div class="gl" style="left:0;right:0;top:calc(var(--sat) + 12px)">폰을 두 손에 쥐고, 기울여서 조준해요</div>`;
   g.classList.remove('out'); g.hidden = false;
   guideT = setTimeout(() => { g.classList.add('out'); setTimeout(() => { g.hidden = true; }, 450); }, 3000);
 }
