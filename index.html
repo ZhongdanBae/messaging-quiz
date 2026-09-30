@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1">
 <meta name="theme-color" content="#FEE500" id="themeColor">
 <meta name="apple-mobile-web-app-capable" content="yes">
-<meta name="mq-build" content="20260930182246">
+<meta name="mq-build" content="20260930184212">
 <title>메시징 퀴즈!</title>
 <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.min.css">
@@ -390,9 +390,9 @@ html.arc-open,html.arc-open body{overflow:hidden;background:#0C0D0F}
         <span class="lbl">팀 고르기</span>
         <div class="teampick" id="joinTeams"></div>
         <label class="lbl" for="name">이름</label>
-        <input class="field" type="text" id="name" maxlength="20" autocomplete="off" autocapitalize="off" placeholder="예: 레미" required>
+        <input class="field" type="text" id="name" maxlength="20" autocomplete="off" autocapitalize="off" placeholder="메시징팀 이름" required>
         <button class="cta" type="submit" id="joinBtn">입장하기</button>
-        <p class="hint" id="joinHint">닉네임도 괜찮아요. 팀과 이름은 나중에 위쪽 이름을 눌러 고칠 수 있어요.</p>
+        <p class="hint" id="joinHint">메시징팀 이름으로 적어 주세요. 팀은 나중에 위쪽 이름을 눌러 고칠 수 있어요.</p>
       </form>
       <p class="foot">카카오 플레이샵 · 메시징팀 워크샵</p>
     </section>
@@ -636,6 +636,8 @@ function paintMe(){
 }
 
 /* ---------- 입장 ---------- */
+// 들어올 수 있는 이름은 서버가 정한다(명단은 이 페이지에 없다). 명단에 없으면 서버가 BAD_NAME 을 돌려준다.
+const NAME_BAD = '명단에 없는 이름이에요. 메시징팀 이름으로 적어 주세요.';
 // 저절로 부를 땐 이름 없이 기기만 확인한다. 진행자가 참가자까지 지웠으면 NEED_NAME 이 와서 입장 화면으로 돌아간다.
 // 이름을 넘기는 건 사람이 입장 버튼을 눌렀을 때뿐이다.
 async function join(nm, team){
@@ -652,7 +654,9 @@ $('#joinForm').addEventListener('submit', async e => {
   if(!pickedTeam){ $('#joinTeams').classList.add('shake'); setTimeout(() => $('#joinTeams').classList.remove('shake'), 400); $('#joinHint').textContent = '팀을 먼저 골라 주세요.'; return; }
   if(!v){ $('#name').classList.add('shake'); setTimeout(() => $('#name').classList.remove('shake'), 400); return; }
   $('#joinBtn').disabled = true; $('#joinHint').textContent = '들어가는 중…';
-  try{ const r = await join(v, pickedTeam); if(r.ok){ buzz(20); pickedTeam = null; $('#joinHint').textContent = '닉네임도 괜찮아요. 팀과 이름은 나중에 위쪽 이름을 눌러 고칠 수 있어요.'; toast(r.team + '팀으로 들어왔어요'); render(); } else $('#joinHint').textContent = '다시 시도해 주세요 (' + r.code + ')'; }
+  try{ const r = await join(v, pickedTeam); if(r.ok){ buzz(20); pickedTeam = null; $('#joinHint').textContent = '메시징팀 이름으로 적어 주세요. 팀은 나중에 위쪽 이름을 눌러 고칠 수 있어요.'; toast(r.team + '팀으로 들어왔어요'); render(); }
+    else if(r.code === 'BAD_NAME'){ $('#name').classList.add('shake'); setTimeout(() => $('#name').classList.remove('shake'), 400); $('#joinHint').textContent = NAME_BAD; }
+    else $('#joinHint').textContent = '다시 시도해 주세요 (' + r.code + ')'; }
   catch(err){ $('#joinHint').textContent = '연결이 안 돼요. 잠시 뒤 다시 눌러 주세요.'; setNet(true); }
   $('#joinBtn').disabled = false;
 });
@@ -663,6 +667,7 @@ $('#renameForm').addEventListener('submit', async e => {
   const v = $('#name2').value.trim(); if(!v) return;
   try{
     const r = await rpc('rename_me', { p_device: device, p_name: v });
+    if(r.code === 'BAD_NAME'){ $('#name2').classList.add('shake'); setTimeout(() => $('#name2').classList.remove('shake'), 400); toast('명단에 없는 이름이에요'); return; }
     if(r.ok){ me.name = r.name; name = r.name; try{ localStorage.setItem(NAME_KEY, name); }catch(e2){} }
     else if(r.code === 'NOT_JOINED'){ await join(v, pickedTeam); }
     let moved = false;
