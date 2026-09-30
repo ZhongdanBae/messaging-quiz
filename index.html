@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1">
 <meta name="theme-color" content="#FEE500" id="themeColor">
 <meta name="apple-mobile-web-app-capable" content="yes">
-<meta name="mq-build" content="20260930211819">
+<meta name="mq-build" content="20260930214249">
 <title>메시징 퀴즈!</title>
 <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.min.css">
@@ -1912,12 +1912,12 @@ function paintLive(){
 }
 /* ---------- 겐세이 ---------- */
 // 쏘는 사람이 다른 팀이고(게임이 보낸 명단으로 가린다) 게임이 받는 중(live.hk)일 때만 가운데 버튼을 보인다.
-// 누르면 겐세이 채널로 HTTP 한 번(웹소켓 채널에 들어가지 않는다). 보내는 건 폰마다 1초에 한 번이다. 그 사이에 누른 건
-// 손맛만 주고, 1초가 되면 한 번 더 보낸다(한 사람 겐세이는 마지막 누름부터 2초라 이걸로 계속 이어진다).
+// 누르면 겐세이 채널로 HTTP 한 번(웹소켓 채널에 들어가지 않는다). 보내는 건 폰마다 1.5초에 한 번이다. 그 사이에 누른 건
+// 손맛만 주고, 1.5초가 되면 한 번 더 보낸다(한 사람 겐세이는 마지막 누름부터 2초라 이걸로 계속 이어진다).
 // 방 전체가 마구 눌러도 Supabase 초당 메시지 한도(넘으면 모든 채널이 끊긴다) 아래에 머문다.
 // 게임은 한 사람 것은 겹치지 않고 2초 동안, 여러 사람 것은 겹쳐서 최대 5단계까지 센다.
 const HECKLE_CH = ARC + 'archery-heckle';
-const HK_EVERY = 1000;
+const HK_EVERY = 1500;
 let hkLast = 0, hkLater = 0;
 function myArcTeam(){
   if(!me || !live || !Array.isArray(live.tm)) return -1;
