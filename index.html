@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1">
 <meta name="theme-color" content="#FEE500" id="themeColor">
 <meta name="apple-mobile-web-app-capable" content="yes">
-<meta name="mq-build" content="20260930184212">
+<meta name="mq-build" content="20260930211819">
 <title>메시징 퀴즈!</title>
 <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.min.css">
@@ -286,6 +286,15 @@ html.arc-open,html.arc-open body{overflow:hidden;background:#0C0D0F}
 .al-cta p{margin:0;text-align:center;font-size:12.5px;font-weight:700;color:#9AA6B2;word-break:keep-all}
 @keyframes pulse{50%{transform:scale(1.02)}}
 .al-foot{margin:0;text-align:center;font-size:11.5px;font-weight:600;color:#5E6A76}
+/* 겐세이: 다른 팀 사람이 쏠 때만, 화면 가운데에 */
+.hk{position:fixed;left:50%;top:50%;z-index:9;transform:translate(-50%,-50%);display:flex;flex-direction:column;align-items:center;gap:10px;padding:18px 20px 14px;border-radius:28px;background:rgba(12,13,15,.82);-webkit-backdrop-filter:blur(6px);backdrop-filter:blur(6px);box-shadow:0 0 0 1px rgba(255,255,255,.06),0 20px 60px rgba(0,0,0,.55);pointer-events:none;width:min(300px,86vw)}
+.hk button{pointer-events:auto;width:156px;height:156px;border:0;border-radius:50%;background:radial-gradient(circle at 35% 30%,#FF6B6B,#C8102E 70%);color:#fff!important;font-size:30px;font-weight:900;letter-spacing:-.04em;box-shadow:0 12px 34px rgba(200,16,46,.45),inset 0 -6px 0 rgba(0,0,0,.18);touch-action:manipulation;transition:transform .08s}
+.hk button:active,.hk button.hit{transform:scale(.92)}
+.hk button small{display:block;font-size:13px;font-weight:800;opacity:.85;margin-top:2px}
+.hk .lv{display:flex;gap:6px;pointer-events:none}
+.hk .lv i{width:10px;height:10px;border-radius:50%;box-shadow:inset 0 0 0 1.5px rgba(255,255,255,.35)}
+.hk .lv i.on{background:#FF6B6B;box-shadow:none}
+.hk p{margin:0;font-size:12.5px;font-weight:800;color:#C9D1DA;text-align:center;word-break:keep-all;line-height:1.45;pointer-events:none}
 
 /* 컨트롤러: 무광 카본 바탕, 금색(과녁 10점) 강조, 흰 시위. 과녁 링 색은 결과를 보여 줄 때만 쓴다.
    가로 기준으로 왼손 엄지 = 숨, 오른손 엄지 = 패드(위에서 내려다본 활). 왼손잡이는 자리를 바꾼다. */
@@ -540,6 +549,7 @@ html.arc-open,html.arc-open body{overflow:hidden;background:#0C0D0F}
     </div>
     <div class="cp-zone cp-pad" id="cpPad"><div class="lab" id="cpPadLab"></div></div>
   </section>
+  <div class="hk" id="hk" hidden><button type="button" id="hkBtn">겐세이!<small>누르면 2초</small></button><div class="lv" id="hkLv"></div><p id="hkTip"></p></div>
   <div class="cp-edge" id="cpEdge"></div>
   <div class="cp-guide" id="cpGuide" hidden></div>
   <div class="cp-note" id="cpNote" hidden></div>
@@ -1083,7 +1093,7 @@ const TURN_CH = ARC + 'archery-turn', PAD_CH = ARC + 'archery-pad';
 const LIVE_TIMEOUT = 9000;          // 게임은 3초마다 보낸다. 세 번 못 받으면 실황을 걷는다
 const PAD_EVERY = 40, PAD_BEAT_AIM = 200, PAD_BEAT = 400;
 const BOW_KO = { recurve: '리커브', compound: '컴파운드', longbow: '롱보우' };
-const ST_KO = { ready: '준비', raise: '활을 드는 중', aim: '조준 중', flight: '화살이 날아가는 중', impact: '결과', end: '엔드 결과', over: '경기 끝', intro: '다음 대결 준비', setup: '준비' };
+const ST_KO = { ready: '준비', raise: '활을 드는 중', aim: '조준 중', flight: '화살이 날아가는 중', impact: '결과', end: '엔드 결과', over: '경기 끝', intro: '다음 라운드 준비', setup: '준비' };
 const isIOS = /iP(hone|ad|od)/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
 const lsGet = (k, d) => { try{ const v = localStorage.getItem(k); return v === null ? d : v; }catch(e){ return d; } };
 const lsSet = (k, v) => { try{ localStorage.setItem(k, v); }catch(e){} };
@@ -1861,6 +1871,7 @@ function arcPaint(){
   const el = $('#arc');
   if(el.hidden === on){ el.hidden = !on; document.documentElement.classList.toggle('arc-open', on); if(!on){ Hap.stop(); } }
   $('#arcLive').hidden = !showLive; $('#arcPad').hidden = !showCtl;
+  if(!showLive) $('#hk').hidden = true;
   // 컨트롤러가 내려가면 가장자리 색과 첫 사용 안내도 같이 걷는다(실황 위에 남지 않게)
   if(!showCtl) $('#cpGyro').hidden = true;
   if(!showCtl){ if(edgeK){ edgeK = ''; const e = $('#cpEdge'); e.style.setProperty('--ec', 'transparent'); e.style.setProperty('--ew', '0px'); } $('#cpGuide').hidden = true; }
@@ -1885,6 +1896,7 @@ function paintLive(){
   const pl = $('#alPull'); pl.hidden = p.st !== 'aim'; pl.querySelector('i').style.width = Math.min(100, (p.pull || 0) / 1.04 * 100) + '%';
   paintLast(false);
   paintBoard();
+  paintHeckle();
   // 버튼은 내용이 바뀔 때만 새로 만든다(그리는 도중에 누른 탭이 사라지지 않게)
   const cta = $('#alCta');
   const kind = !mine() ? '' : ctl.lost === 'other' ? 'other' : ctl.stopped === p.turn ? 'stopped' : p.mt ? 'mouse' : '';
@@ -1898,6 +1910,55 @@ function paintLive(){
     const b = $('#alStart'); if(b){ hapOn(b); b.addEventListener('click', resumeCtl); }
   }
 }
+/* ---------- 겐세이 ---------- */
+// 쏘는 사람이 다른 팀이고(게임이 보낸 명단으로 가린다) 게임이 받는 중(live.hk)일 때만 가운데 버튼을 보인다.
+// 누르면 겐세이 채널로 HTTP 한 번(웹소켓 채널에 들어가지 않는다). 보내는 건 폰마다 1초에 한 번이다. 그 사이에 누른 건
+// 손맛만 주고, 1초가 되면 한 번 더 보낸다(한 사람 겐세이는 마지막 누름부터 2초라 이걸로 계속 이어진다).
+// 방 전체가 마구 눌러도 Supabase 초당 메시지 한도(넘으면 모든 채널이 끊긴다) 아래에 머문다.
+// 게임은 한 사람 것은 겹치지 않고 2초 동안, 여러 사람 것은 겹쳐서 최대 5단계까지 센다.
+const HECKLE_CH = ARC + 'archery-heckle';
+const HK_EVERY = 1000;
+let hkLast = 0, hkLater = 0;
+function myArcTeam(){
+  if(!me || !live || !Array.isArray(live.tm)) return -1;
+  const k = nkey(me.name);
+  return live.tm.findIndex(t => Array.isArray(t) && t.includes(k));
+}
+function heckleOk(){
+  const w = live && live.who;
+  if(!live || !live.hk || !w || !w.n || mine()) return false;
+  const t = myArcTeam();
+  return t >= 0 && typeof w.t === 'number' && w.t >= 0 && t !== w.t;
+}
+function paintHeckle(){
+  const el = $('#hk'); const show = !$('#arcLive').hidden && heckleOk();
+  el.hidden = !show;
+  if(!show) return;
+  const lv = Math.max(0, Math.min(5, live.hl || 0));
+  const k = String(lv);
+  const lvEl = $('#hkLv');
+  if(lvEl.dataset.k !== k){ lvEl.dataset.k = k; lvEl.innerHTML = [0, 1, 2, 3, 4].map(i => `<i class="${i < lv ? 'on' : ''}"></i>`).join(''); }
+  $('#hkTip').textContent = `${live.who.n} 님 흔들기. 여럿이 같이 누를수록 세져요`;
+}
+function sendHeckle(){
+  if(!heckleOk()) return;
+  const b = $('#hkBtn'); b.classList.remove('hit'); void b.offsetWidth; b.classList.add('hit'); setTimeout(() => b.classList.remove('hit'), 120);
+  Hap.play(14, 2);
+  const now = performance.now(), wait = hkLast + HK_EVERY - now;
+  if(wait > 0){ if(!hkLater) hkLater = setTimeout(() => { hkLater = 0; postHeckle(); }, wait); return; }
+  postHeckle();
+}
+async function postHeckle(){
+  if(!heckleOk()) return;
+  hkLast = performance.now();
+  try{
+    await fetch(URL_ + '/realtime/v1/api/broadcast', { method: 'POST', keepalive: true,
+      headers: { apikey: ANON, Authorization: 'Bearer ' + ANON, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ messages: [{ topic: HECKLE_CH, event: 'heckle', payload: { v: 1, k: 'heckle', turn: live.turn, n: me.name } }] }) });
+  }catch(e){}
+}
+$('#hkBtn').addEventListener('pointerdown', e => { e.preventDefault(); Snd.unlock(); sendHeckle(); });
+hapOn($('#hkBtn'));
 function paintLast(pop){
   const l = live && live.last, el = $('#alLast');
   if(!l || !l.l){ el.hidden = true; el.dataset.k = ''; return; }
@@ -1914,9 +1975,9 @@ function paintBoard(){
   if($('#alBoard').dataset.k === k) return;
   $('#alBoard').dataset.k = k;
   const shots = r => { const out = (r.shots || []).map(s => ring(s[0], s[1])); for(let i = out.length; i < (r.slots || 0); i++) out.push('<span class="ring e"></span>'); return out.join(''); };
-  const head = b.kind === 'team' ? `<div class="h"><span>팀 · 이번 대결</span><span>${esc(b.vl || '')}${b.pl ? ' · ' + esc(b.pl) : ''}</span></div>` : `<div class="h"><span>선수</span><span>${esc(b.vl || '합계')}</span></div>`;
+  const head = b.kind === 'team' ? `<div class="h"><span>팀 · 쏘는 사람</span><span>${esc(b.vl || '')}${b.pl ? ' · ' + esc(b.pl) : ''}</span></div>` : `<div class="h"><span>선수</span><span>${esc(b.vl || '합계')}</span></div>`;
   $('#alBoard').innerHTML = head + rows.map(r => b.kind === 'team'
-    ? `<div class="br ${live.who && r.who === live.who.n ? 'cur' : ''}" style="--c:${esc(r.c)}"><span class="bar"></span><span class="nm"><b>${esc(r.n)}</b><small>${esc(r.who)}${r.note ? ' · ' + esc(r.note) : ''}</small></span><span class="sh">${shots(r)}</span><span class="v"><b>${r.v}</b>${b.pl ? `<small>누적 ${r.pts}</small>` : ''}</span></div>`
+    ? `<div class="br ${live.who && r.who === live.who.n ? 'cur' : ''}" style="--c:${esc(r.c)}"><span class="bar"></span><span class="nm"><b>${esc(r.n)}</b><small>${esc(r.who)}${r.note ? ' · ' + esc(r.note) : ''}</small></span><span class="sh">${shots(r)}</span><span class="v"><b>${r.v}</b>${b.pl ? `<small>${esc(b.pl)} ${r.pts}</small>` : ''}</span></div>`
     : `<div class="br ${r.cur ? 'cur' : ''}" style="--c:${esc(r.c)}"><span class="bar"></span><span class="nm"><b>${esc(r.n)}</b></span><span class="sh">${shots(r)}</span><span class="v"><b>${r.v}</b></span></div>`).join('');
 }
 function showRes(p){
